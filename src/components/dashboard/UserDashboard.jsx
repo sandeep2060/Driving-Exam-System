@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { supabase } from '../../lib/supabaseClient'
 import DashboardSidebar from './DashboardSidebar'
 import Overview from './Overview'
 import PersonalDetails from './PersonalDetails'
@@ -38,9 +39,19 @@ function UserDashboard({ email, role, onSignOut, profile, profileId }) {
   })
 
   const [govStatus, setGovStatus] = useState({
-    status: 'not_submitted', // not_submitted | pending | approved | rejected
+    status: 'not_submitted', // not_submitted | pending | verified | rejected
     reason: '',
   })
+
+  // Load verification status from profile
+  useEffect(() => {
+    if (profile) {
+      setGovStatus({
+        status: profile.verification_status || 'not_submitted',
+        reason: profile.verification_reason || '',
+      })
+    }
+  }, [profile])
 
   const [examState, setExamState] = useState({
     hasTakenExam: false,
@@ -95,13 +106,34 @@ function UserDashboard({ email, role, onSignOut, profile, profileId }) {
     return diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0
   }, [examState.failedUntil])
 
-  const handleSubmitForVerification = () => {
+  const handleSubmitForVerification = async () => {
     if (profileCompletion < 100) {
       alert('Please complete all required sections before submitting for verification.')
       return
     }
-    setGovStatus({ status: 'pending', reason: '' })
+    
+    if (!profileId) return
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          verification_status: 'pending',
+          verification_reason: null,
+        })
+        .eq('id', profileId)
+
+      if (error) throw error
+
+      setGovStatus({ status: 'pending', reason: '' })
+      alert('Profile submitted for verification. An admin will review it soon.')
+    } catch (error) {
+      console.error('Error submitting for verification:', error)
+      alert('Failed to submit for verification. Please try again.')
+    }
   }
+
+  const isVerified = govStatus.status === 'verified'
 
   return (
     <div className="dashboard-layout">
@@ -155,6 +187,7 @@ function UserDashboard({ email, role, onSignOut, profile, profileId }) {
             setExamState={setExamState}
             isExamLocked={isExamLocked}
             remainingDays={remainingDays}
+            isVerified={isVerified}
           />
         )}
 

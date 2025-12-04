@@ -24,7 +24,7 @@ function DashboardPage() {
       const { data: profileRow } = await supabase
         .from('profiles')
         .select(
-          'role, full_name_en, dob_ad, gender, phone, guardian_name, province, district, municipality, ward, permanent_address, temporary_address, postal_code, government_id_type, citizenship_number, citizenship_issue_date, citizenship_issue_district, national_id_number',
+          'role, full_name_en, dob_ad, gender, phone, guardian_name, province, district, municipality, ward, permanent_address, temporary_address, postal_code, government_id_type, citizenship_number, citizenship_issue_date, citizenship_issue_district, national_id_number, verification_status, verification_reason',
         )
         .eq('id', authUser.id)
         .single()
