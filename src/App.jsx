@@ -1179,13 +1179,13 @@ function Home() {
             </p>
           </div>
           <div className="contact-grid">
-            <div>
+      <div>
               <h3>Department of Transport Management</h3>
               <p>Ministry of Physical Infrastructure & Transport, Government of Nepal</p>
               <p>Kathmandu, Nepal</p>
               <p>Phone: +977-1-XXXXXXX</p>
               <p>Email: info@dotm.gov.np</p>
-            </div>
+      </div>
             <div>
               <h3>Online Support</h3>
               <ul className="bullet-list">
@@ -1208,7 +1208,7 @@ function Home() {
               onClick={closeResetModal}
             >
               ×
-            </button>
+        </button>
             {isPasswordRecovery ? (
               <>
                 <h3>Set a new password</h3>
@@ -1280,7 +1280,7 @@ function Home() {
   )
 }
 
-function Dashboard({ email, isAdmin, role, onSignOut }) {
+function Dashboard({ email, isAdmin, role, onSignOut, profile, profileId }) {
   const [activeSection, setActiveSection] = useState('overview')
 
   const [personalDetails, setPersonalDetails] = useState({
@@ -1320,6 +1320,20 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
     passed: false,
     score: 0,
     failedUntil: null,
+  })
+
+  const [sectionStatus, setSectionStatus] = useState({
+    personal: '',
+    address: '',
+    documents: '',
+  })
+
+  const [govId, setGovId] = useState({
+    type: 'citizenship', // 'citizenship' | 'national_id'
+    citizenshipNumber: '',
+    citizenshipIssueDate: '',
+    citizenshipIssueDistrict: '',
+    nationalIdNumber: '',
   })
 
   const profileCompletion = useMemo(() => {
@@ -1424,11 +1438,181 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
     return 'Not eligible – failed theory exam'
   }, [examState])
 
+  useEffect(() => {
+    if (!profile) return
+    setPersonalDetails((prev) => ({
+      ...prev,
+      fullName: profile.full_name_en || prev.fullName,
+      dob: profile.dob_ad || prev.dob,
+      gender: profile.gender || prev.gender,
+      phone: profile.phone || prev.phone,
+      guardianName: profile.guardian_name || prev.guardianName,
+    }))
+    setAddressDetails((prev) => ({
+      ...prev,
+      province: profile.province || prev.province,
+      district: profile.district || prev.district,
+      municipality: profile.municipality || prev.municipality,
+      ward: profile.ward || prev.ward,
+      permanentAddress: profile.permanent_address || prev.permanentAddress,
+      temporaryAddress: profile.temporary_address || prev.temporaryAddress,
+      postalCode: profile.postal_code || prev.postalCode,
+    }))
+
+    setGovId((prev) => ({
+      ...prev,
+      type: profile.government_id_type || prev.type,
+      citizenshipNumber: profile.citizenship_number ?? '',
+      citizenshipIssueDate: profile.citizenship_issue_date
+        ? profile.citizenship_issue_date.substring(0, 10)
+        : '',
+      citizenshipIssueDistrict: profile.citizenship_issue_district ?? '',
+      nationalIdNumber: profile.national_id_number ?? '',
+    }))
+  }, [profile])
+
+  const handleSavePersonal = async () => {
+    if (!profileId) return
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name_en: personalDetails.fullName || null,
+          dob_ad: personalDetails.dob || null,
+          gender: personalDetails.gender || null,
+          phone: personalDetails.phone || null,
+          guardian_name: personalDetails.guardianName || null,
+        })
+        .eq('id', profileId)
+
+      if (error) {
+        setSectionStatus((prev) => ({
+          ...prev,
+          personal: 'Error saving personal details. Please try again.',
+        }))
+        return
+      }
+
+      setSectionStatus((prev) => ({
+        ...prev,
+        personal: 'Personal details saved successfully.',
+      }))
+    } catch {
+      setSectionStatus((prev) => ({
+        ...prev,
+        personal: 'Unexpected error saving personal details.',
+      }))
+    }
+  }
+
+  const handleSaveAddress = async () => {
+    if (!profileId) return
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          province: addressDetails.province || null,
+          district: addressDetails.district || null,
+          municipality: addressDetails.municipality || null,
+          ward: addressDetails.ward || null,
+          permanent_address: addressDetails.permanentAddress || null,
+          temporary_address: addressDetails.temporaryAddress || null,
+          postal_code: addressDetails.postalCode || null,
+        })
+        .eq('id', profileId)
+
+      if (error) {
+        setSectionStatus((prev) => ({
+          ...prev,
+          address: 'Error saving address details. Please try again.',
+        }))
+        return
+      }
+
+      setSectionStatus((prev) => ({
+        ...prev,
+        address: 'Address details saved successfully.',
+      }))
+    } catch {
+      setSectionStatus((prev) => ({
+        ...prev,
+        address: 'Unexpected error saving address details.',
+      }))
+    }
+  }
+
+  const handleSaveGovernmentId = async () => {
+    if (!profileId) return
+
+    if (govId.type === 'citizenship') {
+      if (
+        !govId.citizenshipNumber.trim() ||
+        !govId.citizenshipIssueDate ||
+        !govId.citizenshipIssueDistrict.trim()
+      ) {
+        setSectionStatus((prev) => ({
+          ...prev,
+          documents: 'Please fill citizenship number, issue date, and issue district.',
+        }))
+        return
+      }
+    }
+
+    if (govId.type === 'national_id') {
+      if (!govId.nationalIdNumber.trim()) {
+        setSectionStatus((prev) => ({
+          ...prev,
+          documents: 'Please enter your National ID card number.',
+        }))
+        return
+      }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          government_id_type: govId.type,
+          citizenship_number:
+            govId.type === 'citizenship' ? govId.citizenshipNumber.trim() : null,
+          citizenship_issue_date:
+            govId.type === 'citizenship' && govId.citizenshipIssueDate
+              ? govId.citizenshipIssueDate
+              : null,
+          citizenship_issue_district:
+            govId.type === 'citizenship' && govId.citizenshipIssueDistrict
+              ? govId.citizenshipIssueDistrict.trim()
+              : null,
+          national_id_number:
+            govId.type === 'national_id' ? govId.nationalIdNumber.trim() : null,
+        })
+        .eq('id', profileId)
+
+      if (error) {
+        setSectionStatus((prev) => ({
+          ...prev,
+          documents: 'Error saving government ID details. Please try again.',
+        }))
+        return
+      }
+
+      setSectionStatus((prev) => ({
+        ...prev,
+        documents: 'Government ID details saved successfully.',
+      }))
+    } catch {
+      setSectionStatus((prev) => ({
+        ...prev,
+        documents: 'Unexpected error saving government ID details.',
+      }))
+    }
+  }
+
   return (
     <div className="dashboard-layout">
       <aside className="dashboard-sidebar">
         <div className="dashboard-headings">
-          <p className="eyebrow">Citizen dashboard</p>
+          <p className="eyebrow">{isAdmin ? 'Admin dashboard' : 'Citizen dashboard'}</p>
           <h2>{role} account</h2>
           <p className="lede">Signed in as {email}</p>
         </div>
@@ -1468,6 +1652,13 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
           >
             Online exam
           </button>
+          <button
+            type="button"
+            className={activeSection === 'account' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setActiveSection('account')}
+          >
+            Account settings
+          </button>
         </nav>
         <button type="button" className="secondary-btn" onClick={onSignOut}>
           Sign out
@@ -1476,58 +1667,93 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
 
       <section className="dashboard-main">
         {activeSection === 'overview' && (
-          <div className="dashboard-panels">
-            <article className="panel">
-              <h3>Profile completion</h3>
-              <p>Your driving licence application profile should be fully completed.</p>
-              <div className="progress-bar">
-                <div
-                  className="progress-bar-fill"
-                  style={{ width: `${profileCompletion}%` }}
-                />
+          <>
+            {isAdmin ? (
+              <div className="dashboard-panels">
+                <article className="panel">
+                  <h3>Manage instructors</h3>
+                  <p>
+                    Assign instructors to trial routes, monitor their performance, and view
+                    evaluation reports for each driving centre.
+                  </p>
+                </article>
+                <article className="panel">
+                  <h3>Regulatory notices</h3>
+                  <p>
+                    Publish compliance and safety circulars for all portal users and keep
+                    licence rules up to date across Nepal.
+                  </p>
+                </article>
+                <article className="panel">
+                  <h3>Exam &amp; trial overview</h3>
+                  <p className="small-text">
+                    View statistics of online theory exams and trial outcomes (to be wired to
+                    backend analytics).
+                  </p>
+                </article>
+      </div>
+            ) : (
+              <div className="dashboard-panels">
+                <article className="panel">
+                  <h3>Profile completion</h3>
+                  <p>Your driving licence application profile should be fully completed.</p>
+                  <div className="progress-bar">
+                    <div
+                      className="progress-bar-fill"
+                      style={{ width: `${profileCompletion}%` }}
+                    />
+                  </div>
+                  <p className="progress-label">{profileCompletion}% completed</p>
+                  <p className="small-text">
+                    Complete your personal details, address, and documents to reach 100% and
+                    submit for verification.
+                  </p>
+                </article>
+
+                <article className="panel">
+                  <h3>Exam status</h3>
+                  <p>{examEligibilityBadge}</p>
+                  {examState.hasTakenExam && (
+                    <p className="small-text">Last theory exam score: {examState.score}%</p>
+                  )}
+                  {isExamLocked && (
+                    <p className="small-text warning">
+                      You can retake your online exam in {remainingDays} day
+                      {remainingDays === 1 ? '' : 's'}.
+                    </p>
+                  )}
+                </article>
+
+                <article className="panel">
+                  <h3>Government verification</h3>
+                  <p>
+                    Status:{' '}
+                    <strong>
+                      {govStatus.status === 'not_submitted'
+                        ? 'Not submitted'
+                        : govStatus.status.charAt(0).toUpperCase() +
+                          govStatus.status.slice(1)}
+                    </strong>
+                  </p>
+                  {govStatus.status === 'rejected' && govStatus.reason && (
+                    <p className="small-text warning">Reason: {govStatus.reason}</p>
+                  )}
+                  {govStatus.status !== 'approved' && (
+                    <button
+                      type="button"
+                      className="secondary-outline-btn small"
+                      onClick={handleSubmitForVerification}
+                      disabled={profileCompletion < 100}
+                    >
+                      {profileCompletion < 100
+                        ? 'Complete profile to submit'
+                        : 'Submit for verification'}
+                    </button>
+                  )}
+                </article>
               </div>
-              <p className="progress-label">{profileCompletion}% completed</p>
-            </article>
-
-            <article className="panel">
-              <h3>Exam status</h3>
-              <p>{examEligibilityBadge}</p>
-              {examState.hasTakenExam && (
-                <p className="small-text">Last theory exam score: {examState.score}%</p>
-              )}
-              {isExamLocked && (
-                <p className="small-text warning">
-                  You can retake your online exam in {remainingDays} day
-                  {remainingDays === 1 ? '' : 's'}.
-                </p>
-              )}
-            </article>
-
-            <article className="panel">
-              <h3>Government verification</h3>
-              <p>
-                Status:{' '}
-                <strong>
-                  {govStatus.status === 'not_submitted'
-                    ? 'Not submitted'
-                    : govStatus.status.charAt(0).toUpperCase() +
-                      govStatus.status.slice(1)}
-                </strong>
-              </p>
-              {govStatus.status === 'rejected' && govStatus.reason && (
-                <p className="small-text warning">Reason: {govStatus.reason}</p>
-              )}
-              {govStatus.status !== 'approved' && (
-                <button
-                  type="button"
-                  className="secondary-outline-btn small"
-                  onClick={handleSubmitForVerification}
-                >
-                  Submit for verification
-                </button>
-              )}
-            </article>
-          </div>
+            )}
+          </>
         )}
 
         {activeSection === 'personal' && (
@@ -1613,6 +1839,12 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
                   placeholder="Father or Mother full name"
                 />
               </label>
+              <button type="button" className="primary-btn" onClick={handleSavePersonal}>
+                Save personal details
+              </button>
+              {sectionStatus.personal && (
+                <p className="small-text success">{sectionStatus.personal}</p>
+              )}
             </form>
           </div>
         )}
@@ -1729,6 +1961,12 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
                   placeholder="Postal / ZIP code"
                 />
               </label>
+              <button type="button" className="primary-btn" onClick={handleSaveAddress}>
+                Save address
+              </button>
+              {sectionStatus.address && (
+                <p className="small-text success">{sectionStatus.address}</p>
+              )}
             </form>
           </div>
         )}
@@ -1740,6 +1978,105 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
               Upload clear, recent scans or photos of your official documents.
             </p>
             <form className="form">
+              <fieldset className="role-group">
+                <legend>Government ID type</legend>
+                <div className="role-options">
+                  <label className="role-option">
+                    <input
+                      type="radio"
+                      name="gov-id-type"
+                      value="citizenship"
+                      checked={govId.type === 'citizenship'}
+                      onChange={() =>
+                        setGovId((prev) => ({
+                          ...prev,
+                          type: 'citizenship',
+                        }))
+                      }
+                    />
+                    Citizenship card
+                  </label>
+                  <label className="role-option">
+                    <input
+                      type="radio"
+                      name="gov-id-type"
+                      value="national_id"
+                      checked={govId.type === 'national_id'}
+                      onChange={() =>
+                        setGovId((prev) => ({
+                          ...prev,
+                          type: 'national_id',
+                        }))
+                      }
+                    />
+                    National ID card
+                  </label>
+                </div>
+              </fieldset>
+
+              {govId.type === 'citizenship' && (
+                <>
+                  <label>
+                    Citizenship number
+                    <input
+                      type="text"
+                      value={govId.citizenshipNumber}
+                      onChange={(event) =>
+                        setGovId((prev) => ({
+                          ...prev,
+                          citizenshipNumber: event.target.value,
+                        }))
+                      }
+                      placeholder="Citizenship number"
+                    />
+                  </label>
+                  <label>
+                    Issue date
+                    <input
+                      type="date"
+                      value={govId.citizenshipIssueDate}
+                      onChange={(event) =>
+                        setGovId((prev) => ({
+                          ...prev,
+                          citizenshipIssueDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Issue district
+                    <input
+                      type="text"
+                      value={govId.citizenshipIssueDistrict}
+                      onChange={(event) =>
+                        setGovId((prev) => ({
+                          ...prev,
+                          citizenshipIssueDistrict: event.target.value,
+                        }))
+                      }
+                      placeholder="District name"
+                    />
+                  </label>
+                </>
+              )}
+
+              {govId.type === 'national_id' && (
+                <label>
+                  National ID card number
+                  <input
+                    type="text"
+                    value={govId.nationalIdNumber}
+                    onChange={(event) =>
+                      setGovId((prev) => ({
+                        ...prev,
+                        nationalIdNumber: event.target.value,
+                      }))
+                    }
+                    placeholder="National ID number"
+                  />
+                </label>
+              )}
+
               <label>
                 National ID / Citizenship (front)
                 <input
@@ -1780,6 +2117,16 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
                   onChange={(event) => handleDocChange('signature', event.target.files)}
                 />
               </label>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={handleSaveGovernmentId}
+              >
+                Save government ID details
+              </button>
+              {sectionStatus.documents && (
+                <p className="small-text success">{sectionStatus.documents}</p>
+              )}
             </form>
           </div>
         )}
@@ -1810,6 +2157,32 @@ function Dashboard({ email, isAdmin, role, onSignOut }) {
                 </button>
               </form>
             )}
+          </div>
+        )}
+
+        {activeSection === 'account' && (
+          <div className="panel">
+            <h3>Account settings</h3>
+            <p className="small-text">
+              Manage your account security. Profile and exam data are linked to your email.
+            </p>
+            <form
+              className="form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                alert(
+                  'To change your password, use the "Forgot password?" link on the login form. A secure reset link will be sent to your email.',
+                )
+              }}
+            >
+              <h4>Change password</h4>
+              <p className="small-text">
+                Changing password is handled via the secure reset flow to protect your account.
+              </p>
+              <button type="submit" className="secondary-outline-btn small">
+                View password reset instructions
+              </button>
+            </form>
           </div>
         )}
       </section>
@@ -1845,10 +2218,15 @@ function DashboardPage() {
       const fallbackRole = authUser.user_metadata?.role || 'user'
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('role')
+        .select(
+          'role, full_name_en, dob_ad, gender, phone, guardian_name, province, district, municipality, ward, permanent_address, temporary_address, postal_code, government_id_type, citizenship_number, citizenship_issue_date, citizenship_issue_district, national_id_number',
+        )
         .eq('id', authUser.id)
         .single()
-      setProfile({ role: profileRow?.role || fallbackRole })
+      setProfile({
+        ...profileRow,
+        role: profileRow?.role || fallbackRole,
+      })
     }
 
     init()
@@ -1881,6 +2259,8 @@ function DashboardPage() {
           isAdmin={isAdmin}
           role={roleLabel}
           onSignOut={handleSignOut}
+          profile={profile}
+          profileId={user.id}
         />
       </main>
       <Footer />
