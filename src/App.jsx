@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
 import NepaliDate from 'nepali-date-converter'
@@ -43,7 +44,7 @@ const calculateAgeFromIsoDate = (isoDate) => {
   return age
 }
 
-function App() {
+function Home() {
   const [authView, setAuthView] = useState('login')
 
   const [signupForm, setSignupForm] = useState({
@@ -91,6 +92,7 @@ function App() {
   const [profile, setProfile] = useState(null)
 
   const applySectionRef = useRef(null)
+  const navigate = useNavigate()
 
   const scrollToApply = () => {
     if (applySectionRef.current) {
@@ -392,6 +394,7 @@ function App() {
     })
     setPendingConfirmationEmail('')
     setResendStatus({ error: '', message: '', loading: false })
+    navigate('/dashboard')
   }
 
   const handleSignOut = async () => {
@@ -514,10 +517,10 @@ function App() {
         <div className="header-left">
           <div className="gov-mark">
             <span className="gov-emblem">🇳🇵</span>
-            <div>
+      <div>
               <p className="gov-eyebrow">Government of Nepal</p>
               <p className="gov-title">Ministry of Physical Infrastructure & Transport</p>
-            </div>
+      </div>
           </div>
           <p className="portal-name">Department of Transport Management</p>
         </div>
@@ -542,7 +545,7 @@ function App() {
             }}
           >
             Login
-          </button>
+        </button>
           <button
             type="button"
             className="primary-btn small"
@@ -649,8 +652,8 @@ function App() {
               The Nepal Driving Licence Online System is a unified digital platform for
               licence registration, written exams, trial scheduling, and renewal
               management.
-            </p>
-          </div>
+        </p>
+      </div>
           <div className="three-column">
             <article className="info-card">
               <h3>Online application</h3>
@@ -1094,12 +1097,18 @@ function App() {
                   )}
                 </>
               ) : (
-                <Dashboard
-                  email={user.email}
-                  role={roleLabel}
-                  isAdmin={isAdmin}
-                  onSignOut={handleSignOut}
-                />
+                <div className="resend-box">
+                  <p className="resend-text">
+                    You are already logged in as <strong>{user.email}</strong>.
+                  </p>
+                  <button
+                    type="button"
+                    className="primary-btn small"
+                    onClick={() => navigate('/dashboard')}
+                  >
+                    Open dashboard
+                  </button>
+                </div>
               )}
 
               <StatusBanner status={status} />
@@ -1266,93 +1275,544 @@ function App() {
         </div>
       )}
 
-      <footer className="site-footer">
-        <div className="footer-main">
-          <div>
-            <p className="footer-title">Nepal Driving Licence Online System</p>
-            <p className="footer-text">
-              An official initiative of the Government of Nepal to make driving licence
-              services simple, transparent, and citizen-friendly.
-            </p>
-          </div>
-          <div className="footer-links">
-            <div>
-              <p className="footer-heading">Government links</p>
-              <a href="#">Ministry of Physical Infrastructure & Transport</a>
-              <a href="#">Department of Transport Management</a>
-              <a href="#">Nepal Traffic Police</a>
-            </div>
-            <div>
-              <p className="footer-heading">Support</p>
-              <a href="#">FAQs</a>
-              <a href="#">Help & documentation</a>
-              <a href="#">Feedback</a>
-            </div>
-      <div>
-              <p className="footer-heading">Connect</p>
-              <a href="#">Facebook</a>
-              <a href="#">Twitter</a>
-              <a href="#">YouTube</a>
-            </div>
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <p>© {new Date().getFullYear()} Government of Nepal. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }
 
 function Dashboard({ email, isAdmin, role, onSignOut }) {
+  const [activeSection, setActiveSection] = useState('overview')
+
+  const [personalDetails, setPersonalDetails] = useState({
+    fullName: '',
+    dob: '',
+    gender: '',
+    phone: '',
+    email,
+    guardianName: '',
+  })
+
+  const [addressDetails, setAddressDetails] = useState({
+    province: '',
+    district: '',
+    municipality: '',
+    ward: '',
+    permanentAddress: '',
+    temporaryAddress: '',
+    postalCode: '',
+  })
+
+  const [documents, setDocuments] = useState({
+    citizenshipFront: null,
+    citizenshipBack: null,
+    passportPhoto: null,
+    birthCertificate: null,
+    signature: null,
+  })
+
+  const [govStatus, setGovStatus] = useState({
+    status: 'not_submitted', // not_submitted | pending | approved | rejected
+    reason: '',
+  })
+
+  const [examState, setExamState] = useState({
+    hasTakenExam: false,
+    passed: false,
+    score: 0,
+    failedUntil: null,
+  })
+
+  const profileCompletion = useMemo(() => {
+    let completed = 0
+    let total = 3
+
+    const personalComplete =
+      personalDetails.fullName &&
+      personalDetails.dob &&
+      personalDetails.gender &&
+      personalDetails.phone &&
+      personalDetails.guardianName
+
+    const addressComplete =
+      addressDetails.province &&
+      addressDetails.district &&
+      addressDetails.municipality &&
+      addressDetails.ward &&
+      addressDetails.permanentAddress
+
+    const docsComplete =
+      documents.citizenshipFront &&
+      documents.citizenshipBack &&
+      documents.passportPhoto &&
+      documents.signature
+
+    if (personalComplete) completed += 1
+    if (addressComplete) completed += 1
+    if (docsComplete) completed += 1
+
+    return Math.round((completed / total) * 100)
+  }, [personalDetails, addressDetails, documents])
+
+  const isExamLocked = useMemo(() => {
+    if (!examState.failedUntil) return false
+    const now = new Date()
+    const until = new Date(examState.failedUntil)
+    return now < until
+  }, [examState.failedUntil])
+
+  const remainingDays = useMemo(() => {
+    if (!examState.failedUntil) return 0
+    const now = new Date()
+    const until = new Date(examState.failedUntil)
+    const diffMs = until.getTime() - now.getTime()
+    return diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0
+  }, [examState.failedUntil])
+
+  const handleDocChange = (key, fileList) => {
+    const file = fileList?.[0] || null
+    if (!file) {
+      setDocuments((prev) => ({ ...prev, [key]: null }))
+      return
+    }
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      alert('Only JPG and PNG images are allowed.')
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      alert('File must be smaller than 3MB.')
+      return
+    }
+    setDocuments((prev) => ({ ...prev, [key]: file }))
+  }
+
+  const handleSubmitForVerification = () => {
+    if (profileCompletion < 100) {
+      alert('Please complete all required sections before submitting for verification.')
+      return
+    }
+    setGovStatus({ status: 'pending', reason: '' })
+  }
+
+  const handleExamSubmit = (event) => {
+    event.preventDefault()
+    // Simple demo: mark as passed; real implementation should calculate score
+    const score = 100
+    const passed = score >= 80
+
+    if (passed) {
+      setExamState({
+        hasTakenExam: true,
+        passed: true,
+        score,
+        failedUntil: null,
+      })
+    } else {
+      const failedUntil = new Date()
+      failedUntil.setDate(failedUntil.getDate() + 90)
+      setExamState({
+        hasTakenExam: true,
+        passed: false,
+        score,
+        failedUntil: failedUntil.toISOString(),
+      })
+    }
+  }
+
+  const examEligibilityBadge = useMemo(() => {
+    if (!examState.hasTakenExam) return 'Awaiting theory exam'
+    if (examState.passed) return 'Eligible for Trial Exam'
+    return 'Not eligible – failed theory exam'
+  }, [examState])
+
   return (
-    <div className="dashboard">
-      <div className="dashboard-headings">
-        <p className="eyebrow">{role} access granted</p>
-        <h2>{isAdmin ? 'Admin dashboard' : 'User dashboard'}</h2>
-        <p className="lede">Signed in as {email}</p>
-      </div>
+    <div className="dashboard-layout">
+      <aside className="dashboard-sidebar">
+        <div className="dashboard-headings">
+          <p className="eyebrow">Citizen dashboard</p>
+          <h2>{role} account</h2>
+          <p className="lede">Signed in as {email}</p>
+        </div>
+        <nav className="dashboard-nav">
+          <button
+            type="button"
+            className={activeSection === 'overview' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setActiveSection('overview')}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            className={activeSection === 'personal' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setActiveSection('personal')}
+          >
+            Personal details
+          </button>
+          <button
+            type="button"
+            className={activeSection === 'address' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setActiveSection('address')}
+          >
+            Address details
+          </button>
+          <button
+            type="button"
+            className={activeSection === 'documents' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setActiveSection('documents')}
+          >
+            Documents
+          </button>
+          <button
+            type="button"
+            className={activeSection === 'exam' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setActiveSection('exam')}
+          >
+            Online exam
+          </button>
+        </nav>
+        <button type="button" className="secondary-btn" onClick={onSignOut}>
+          Sign out
+        </button>
+      </aside>
 
-      <div className="dashboard-panels">
-        {isAdmin ? (
-          <>
+      <section className="dashboard-main">
+        {activeSection === 'overview' && (
+          <div className="dashboard-panels">
             <article className="panel">
-              <h3>Manage instructors</h3>
-              <p>
-                Assign instructors to classes, monitor performance, and view
-                evaluations.
-              </p>
+              <h3>Profile completion</h3>
+              <p>Your driving licence application profile should be fully completed.</p>
+              <div className="progress-bar">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${profileCompletion}%` }}
+                />
+              </div>
+              <p className="progress-label">{profileCompletion}% completed</p>
             </article>
+
             <article className="panel">
-              <h3>Regulatory notices</h3>
-              <p>
-                Publish compliance and safety updates for all school users in
-                one place.
-              </p>
+              <h3>Exam status</h3>
+              <p>{examEligibilityBadge}</p>
+              {examState.hasTakenExam && (
+                <p className="small-text">Last theory exam score: {examState.score}%</p>
+              )}
+              {isExamLocked && (
+                <p className="small-text warning">
+                  You can retake your online exam in {remainingDays} day
+                  {remainingDays === 1 ? '' : 's'}.
+                </p>
+              )}
             </article>
-          </>
-        ) : (
-          <>
+
             <article className="panel">
-              <h3>Lesson progress</h3>
+              <h3>Government verification</h3>
               <p>
-                Track scheduled lessons, completed drives, and instructor
-                feedback.
+                Status:{' '}
+                <strong>
+                  {govStatus.status === 'not_submitted'
+                    ? 'Not submitted'
+                    : govStatus.status.charAt(0).toUpperCase() +
+                      govStatus.status.slice(1)}
+                </strong>
               </p>
+              {govStatus.status === 'rejected' && govStatus.reason && (
+                <p className="small-text warning">Reason: {govStatus.reason}</p>
+              )}
+              {govStatus.status !== 'approved' && (
+                <button
+                  type="button"
+                  className="secondary-outline-btn small"
+                  onClick={handleSubmitForVerification}
+                >
+                  Submit for verification
+                </button>
+              )}
             </article>
-            <article className="panel">
-              <h3>Upcoming tests</h3>
-              <p>
-                Review DMV test appointments and tips shared by your instructors.
-              </p>
-            </article>
-          </>
+          </div>
         )}
-      </div>
 
-      <button type="button" className="secondary-btn" onClick={onSignOut}>
-        Sign out
-      </button>
+        {activeSection === 'personal' && (
+          <div className="panel">
+            <h3>Personal details</h3>
+            <p className="lede small-text">
+              Enter your personal information exactly as it appears on your official documents.
+            </p>
+            <form className="form">
+              <label>
+                Full name
+                <input
+                  type="text"
+                  value={personalDetails.fullName}
+                  onChange={(event) =>
+                    setPersonalDetails((prev) => ({
+                      ...prev,
+                      fullName: event.target.value,
+                    }))
+                  }
+                  placeholder="Full name"
+                />
+              </label>
+              <label>
+                Date of birth
+                <input
+                  type="date"
+                  value={personalDetails.dob}
+                  onChange={(event) =>
+                    setPersonalDetails((prev) => ({
+                      ...prev,
+                      dob: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Gender
+                <select
+                  value={personalDetails.gender}
+                  onChange={(event) =>
+                    setPersonalDetails((prev) => ({
+                      ...prev,
+                      gender: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>
+                Phone number
+                <input
+                  type="tel"
+                  value={personalDetails.phone}
+                  onChange={(event) =>
+                    setPersonalDetails((prev) => ({
+                      ...prev,
+                      phone: event.target.value,
+                    }))
+                  }
+                  placeholder="98XXXXXXXX"
+                />
+              </label>
+              <label>
+                Email (read-only)
+                <input type="email" value={email} readOnly />
+              </label>
+              <label>
+                Father / Mother name
+                <input
+                  type="text"
+                  value={personalDetails.guardianName}
+                  onChange={(event) =>
+                    setPersonalDetails((prev) => ({
+                      ...prev,
+                      guardianName: event.target.value,
+                    }))
+                  }
+                  placeholder="Father or Mother full name"
+                />
+              </label>
+            </form>
+          </div>
+        )}
+
+        {activeSection === 'address' && (
+          <div className="panel">
+            <h3>Address details</h3>
+            <p className="lede small-text">
+              Provide your permanent and current address as per government records.
+            </p>
+            <form className="form">
+              <label>
+                Province / State
+                <select
+                  value={addressDetails.province}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      province: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Select province</option>
+                  <option value="1">Koshi Province</option>
+                  <option value="2">Madhesh Province</option>
+                  <option value="3">Bagmati Province</option>
+                  <option value="4">Gandaki Province</option>
+                  <option value="5">Lumbini Province</option>
+                  <option value="6">Karnali Province</option>
+                  <option value="7">Sudurpashchim Province</option>
+                </select>
+              </label>
+              <label>
+                District
+                <input
+                  type="text"
+                  value={addressDetails.district}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      district: event.target.value,
+                    }))
+                  }
+                  placeholder="District"
+                />
+              </label>
+              <label>
+                Municipality / City
+                <input
+                  type="text"
+                  value={addressDetails.municipality}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      municipality: event.target.value,
+                    }))
+                  }
+                  placeholder="Municipality or city"
+                />
+              </label>
+              <label>
+                Ward number
+                <input
+                  type="number"
+                  value={addressDetails.ward}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      ward: event.target.value,
+                    }))
+                  }
+                  min={1}
+                />
+              </label>
+              <label>
+                Permanent address
+                <input
+                  type="text"
+                  value={addressDetails.permanentAddress}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      permanentAddress: event.target.value,
+                    }))
+                  }
+                  placeholder="Village / Tole"
+                />
+              </label>
+              <label>
+                Temporary address
+                <input
+                  type="text"
+                  value={addressDetails.temporaryAddress}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      temporaryAddress: event.target.value,
+                    }))
+                  }
+                  placeholder="If different from permanent"
+                />
+              </label>
+              <label>
+                Postal code
+                <input
+                  type="text"
+                  value={addressDetails.postalCode}
+                  onChange={(event) =>
+                    setAddressDetails((prev) => ({
+                      ...prev,
+                      postalCode: event.target.value,
+                    }))
+                  }
+                  placeholder="Postal / ZIP code"
+                />
+              </label>
+            </form>
+          </div>
+        )}
+
+        {activeSection === 'documents' && (
+          <div className="panel">
+            <h3>Government documents</h3>
+            <p className="lede small-text">
+              Upload clear, recent scans or photos of your official documents.
+            </p>
+            <form className="form">
+              <label>
+                National ID / Citizenship (front)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleDocChange('citizenshipFront', event.target.files)}
+                />
+              </label>
+              <label>
+                National ID / Citizenship (back)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleDocChange('citizenshipBack', event.target.files)}
+                />
+              </label>
+              <label>
+                Passport-size photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleDocChange('passportPhoto', event.target.files)}
+                />
+              </label>
+              <label>
+                Birth certificate (optional)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleDocChange('birthCertificate', event.target.files)}
+                />
+              </label>
+              <label>
+                Scanned signature
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleDocChange('signature', event.target.files)}
+                />
+              </label>
+            </form>
+          </div>
+        )}
+
+        {activeSection === 'exam' && (
+          <div className="panel">
+            <h3>Online theory exam</h3>
+            {!examState.passed && isExamLocked && (
+              <p className="small-text warning">
+                You are not eligible to retake the exam yet. You can retake your online exam in{' '}
+                {remainingDays} day{remainingDays === 1 ? '' : 's'}.
+              </p>
+            )}
+            {examState.passed && (
+              <p className="small-text success">
+                You have passed the theory exam and are eligible for the trial exam.
+              </p>
+            )}
+            {!examState.passed && !isExamLocked && (
+              <form className="form" onSubmit={handleExamSubmit}>
+                <p className="small-text">
+                  Demo exam: answer the questions and submit. In a real system, questions would be
+                  loaded from the server.
+                </p>
+                {/* Replace with real questions; here we only simulate submission */}
+                <button type="submit" className="primary-btn">
+                  Start and submit demo exam
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
@@ -1364,6 +1824,115 @@ function StatusBanner({ status }) {
     <div className={status.error ? 'status error' : 'status success'}>
       {status.error || status.message}
     </div>
+  )
+}
+
+function DashboardPage() {
+  const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const init = async () => {
+      const { data } = await supabase.auth.getSession()
+      const authUser = data.session?.user
+      if (!authUser) {
+        navigate('/')
+        return
+      }
+      setUser(authUser)
+
+      const fallbackRole = authUser.user_metadata?.role || 'user'
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authUser.id)
+        .single()
+      setProfile({ role: profileRow?.role || fallbackRole })
+    }
+
+    init()
+  }, [navigate])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    navigate('/')
+  }
+
+  if (!user || !profile) {
+    return (
+      <div className="site">
+        <main className="app">
+          <p>Loading dashboard…</p>
+        </main>
+      </div>
+    )
+  }
+
+  const activeRole = profile.role || 'user'
+  const isAdmin = activeRole === 'admin'
+  const roleLabel = isAdmin ? 'Admin' : 'User'
+
+  return (
+    <div className="site">
+      <main className="app">
+        <Dashboard
+          email={user.email}
+          isAdmin={isAdmin}
+          role={roleLabel}
+          onSignOut={handleSignOut}
+        />
+      </main>
+      <Footer />
+    </div>
+  )
+}
+
+function Footer() {
+  return (
+    <footer className="site-footer">
+      <div className="footer-main">
+        <div>
+          <p className="footer-title">Nepal Driving Licence Online System</p>
+          <p className="footer-text">
+            An official initiative of the Government of Nepal to make driving licence
+            services simple, transparent, and citizen-friendly.
+          </p>
+        </div>
+        <div className="footer-links">
+          <div>
+            <p className="footer-heading">Government links</p>
+            <a href="#">Ministry of Physical Infrastructure & Transport</a>
+            <a href="#">Department of Transport Management</a>
+            <a href="#">Nepal Traffic Police</a>
+          </div>
+          <div>
+            <p className="footer-heading">Support</p>
+            <a href="#">FAQs</a>
+            <a href="#">Help & documentation</a>
+            <a href="#">Feedback</a>
+          </div>
+          <div>
+            <p className="footer-heading">Connect</p>
+            <a href="#">Facebook</a>
+            <a href="#">Twitter</a>
+            <a href="#">YouTube</a>
+          </div>
+        </div>
+      </div>
+      <div className="footer-bottom">
+        <p>© {new Date().getFullYear()} Government of Nepal. All rights reserved.</p>
+      </div>
+    </footer>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
+    </Routes>
   )
 }
 

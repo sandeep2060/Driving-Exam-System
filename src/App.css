@@ -741,6 +741,83 @@ input:focus {
   margin-top: 0;
 }
 
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.dashboard-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dashboard-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.nav-item {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  text-align: left;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #475569;
+}
+
+.nav-item.active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: rgba(15, 23, 42, 0.9);
+}
+
+.dashboard-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.progress-bar {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+  margin-top: 0.6rem;
+}
+
+.progress-bar-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.progress-label {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.small-text {
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.small-text.warning {
+  color: #b91c1c;
+}
+
+.small-text.success {
+  color: #15803d;
+}
+
 .notices-section .notice-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
