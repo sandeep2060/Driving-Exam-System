@@ -1,0 +1,1 @@
+after creating account  successfuly and the email is not confirm but user try to login suggest user to cheque mail and confirm the mail and also can send confirm email again if user click send confifrm link again.
